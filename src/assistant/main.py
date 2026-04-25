@@ -71,6 +71,7 @@ async def run(cfg: Config) -> None:
         frame_samples=WakeDetector.FRAME_SAMPLES,
         device=cfg.audio.input_device,
         loop=loop,
+        gain=cfg.audio.input_gain,
     )
     mic.start()
     log.info("Listening for wake word '%s'...", cfg.wake.model)
@@ -121,14 +122,19 @@ def mic_test(cfg: Config, seconds: float) -> None:
     sd.wait()
     rec = rec[:, 0]
 
+    raw_peak = int(np.abs(rec).max())
+    if cfg.audio.input_gain != 1.0:
+        scaled = rec.astype(np.int32) * cfg.audio.input_gain
+        rec = np.clip(scaled, -32768, 32767).astype(np.int16)
     peak = int(np.abs(rec).max())
     rms = float(np.sqrt(np.mean(rec.astype(np.float32) ** 2)))
-    print(f"peak amplitude: {peak} / 32767  (>5000 = healthy speech)")
-    print(f"RMS:            {rms:.0f}        (>500 when talking)")
-    if peak < 200:
+    print(f"raw peak (pre-gain):  {raw_peak} / 32767")
+    print(f"peak (after gain x{cfg.audio.input_gain}): {peak} / 32767  (>5000 = healthy speech)")
+    print(f"RMS (after gain):     {rms:.0f}            (>500 when talking)")
+    if raw_peak < 200:
         print("  -> mic is silent. Wrong device or muted.")
     elif peak < 2000:
-        print("  -> mic is very quiet. Bump system input gain or move closer.")
+        print("  -> still quiet after gain. Raise audio.input_gain in config, or boost ALSA gain.")
     else:
         print("  -> mic looks fine.")
 

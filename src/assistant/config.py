@@ -13,6 +13,7 @@ class AudioCfg:
     output_device: int | None = None
     sample_rate: int = 16000
     playback_rate: int = 24000
+    input_gain: float = 1.0           # software gain for quiet mics; 1.0 = none
 
 
 @dataclass
@@ -30,6 +31,8 @@ class STTCfg:
     language: str = "en"
     silence_timeout_sec: float = 1.2
     max_utterance_sec: float = 20.0
+    vad_threshold: float = 0.3        # Silero VAD speech probability cutoff
+    whisper_vad_filter: bool = False  # second VAD pass inside Whisper; off by default
 
 
 @dataclass

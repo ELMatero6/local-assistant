@@ -1,8 +1,9 @@
 audio:
-  input_device: null      # null = system default; set to int index from `python -m sounddevice`
+  input_device: null      # null = system default; set to int index from `./run.sh mic-test`
   output_device: null
   sample_rate: 16000      # mic capture rate; openWakeWord + Whisper both want 16k
   playback_rate: 24000    # Kokoro outputs 24k
+  input_gain: 1.0         # software gain for quiet mics; bump to 4-8 if alsamixer can't get loud enough
 
 wake:
   model: hey_jarvis       # bundled openWakeWord model. swap for a custom .onnx for "hey gordon"
@@ -16,6 +17,8 @@ stt:
   language: en
   silence_timeout_sec: 1.2   # cut recording after this much trailing silence
   max_utterance_sec: 20
+  vad_threshold: 0.3         # Silero VAD speech probability cutoff; lower = catches quieter speech
+  whisper_vad_filter: false  # second VAD pass inside Whisper. Off because Recorder already gates.
 
 llm:
   host: http://localhost:11434

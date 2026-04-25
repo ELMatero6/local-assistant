@@ -48,7 +48,7 @@ class Recorder:
         return to_float32(pcm)
 
     def _frame_has_speech(self, frame_int16: np.ndarray) -> bool:
-        # Silero needs 512-sample windows. Average probability across windows in this 1280-sample frame.
+        # Silero needs 512-sample windows. Take max probability across windows.
         f32 = to_float32(frame_int16)
         probs = []
         for start in range(0, len(f32) - self.VAD_WINDOW + 1, self.VAD_WINDOW):
@@ -56,7 +56,7 @@ class Recorder:
             probs.append(self.vad(window, self.sample_rate).item())
         if not probs:
             return False
-        return max(probs) > 0.5
+        return max(probs) > self.cfg.vad_threshold
 
 
 class STT:
@@ -74,7 +74,7 @@ class STT:
         segments, _ = self.model.transcribe(
             pcm_f32_16k,
             language=self.cfg.language,
-            vad_filter=True,
+            vad_filter=self.cfg.whisper_vad_filter,
             beam_size=1,
         )
         return " ".join(seg.text.strip() for seg in segments).strip()

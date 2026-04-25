@@ -67,6 +67,36 @@ v4l2-ctl --list-devices
 
 Set `vision.device_index` (typically `0` for `/dev/video0`).
 
+## Mic gain (webcam mics are quiet)
+
+If `./run.sh mic-test` shows a peak under ~5000 when you talk normally, the
+mic is too quiet for reliable wake-word + VAD. Fix in this order:
+
+1. **Hardware gain (best — no noise penalty).**
+
+   ```bash
+   alsamixer            # F4 to switch to capture, F6 to pick the mic, arrow up
+   # or with PulseAudio:
+   pactl list sources short
+   pactl set-source-volume <name> 150%
+   ```
+
+2. **Software gain (fallback).** In `config.yaml`:
+
+   ```yaml
+   audio:
+     input_gain: 6.0    # 4.0-8.0 typical for webcam mics
+   ```
+
+   Re-run `./run.sh mic-test` and aim for peak > 5000 when speaking.
+
+3. **Loosen the VAD** if speech is detected but trimmed:
+
+   ```yaml
+   stt:
+     vad_threshold: 0.2
+   ```
+
 ## Memory layer
 
 The model has three persistent markdown files in `memory/`:

@@ -19,11 +19,13 @@ class MicStream:
         frame_samples: int,
         device: int | None,
         loop: asyncio.AbstractEventLoop,
+        gain: float = 1.0,
     ):
         self.sample_rate = sample_rate
         self.frame_samples = frame_samples
         self.device = device
         self.loop = loop
+        self.gain = float(gain)
         self.queue: asyncio.Queue[np.ndarray] = asyncio.Queue(maxsize=64)
         self._stream: sd.InputStream | None = None
 
@@ -33,6 +35,9 @@ class MicStream:
             pass
         # indata shape: (frames, 1) int16
         chunk = indata[:, 0].copy()
+        if self.gain != 1.0:
+            scaled = chunk.astype(np.int32) * self.gain
+            chunk = np.clip(scaled, -32768, 32767).astype(np.int16)
         try:
             self.loop.call_soon_threadsafe(self.queue.put_nowait, chunk)
         except asyncio.QueueFull:
