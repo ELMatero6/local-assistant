@@ -16,52 +16,35 @@ what you see", etc. Everything runs locally.
 Tested on Ubuntu 22.04 / 24.04 with a single RTX 3090.
 
 ```bash
-# system deps
-sudo apt update
-sudo apt install -y \
-    python3-venv python3-dev \
-    ffmpeg libsndfile1 \
-    espeak-ng \
-    portaudio19-dev \
-    v4l-utils
-
-# (one-time) install the NVIDIA driver + CUDA 12.x if you don't already have it,
-# then verify:
-nvidia-smi
-
-# (one-time) Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull gemma4:latest
-```
-
-Then the project:
-
-```bash
 git clone <this repo>
 cd local-assistant
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+git checkout claude/local-ai-assistant-vision-XWqE4
+./setup.sh         # apt deps + Ollama + .venv + pip install + cuDNN probe
 ```
 
-If `faster-whisper` errors with a `libcudnn_ops_infer.so` not-found, either
-`pip install nvidia-cudnn-cu12` or drop `stt.compute_type` to `int8_float16`
-in `config.yaml`.
+`setup.sh` is idempotent — re-run any time. It will:
 
-Make sure your user is in the `audio` and `video` groups so PortAudio and
-V4L2 can see the webcam mic + camera:
+1. `apt install` ffmpeg, libsndfile, espeak-ng, portaudio, v4l-utils, build tools.
+2. Add you to the `audio` and `video` groups (log out + back in once after first run).
+3. Install Ollama and pull the model named in `config.yaml` (`llm.model`).
+4. Create `.venv/` and `pip install -e .` into it.
+5. Smoke-test faster-whisper + CUDA; if cuDNN is missing it tries
+   `nvidia-cudnn-cu12` automatically and falls back to advising
+   `int8_float16` if that also fails.
 
-```bash
-sudo usermod -aG audio,video $USER
-# log out + back in
-```
+You'll need an NVIDIA driver + CUDA 12.x already installed
+(`nvidia-smi` should work). On a fresh box:
+`sudo ubuntu-drivers autoinstall && sudo reboot`.
 
 ## Run
 
 ```bash
-ollama serve &           # skip if it's already running as a systemd unit
-local-assistant -v
+./run.sh             # forwards args to local-assistant
+./run.sh -v          # verbose logs
 ```
+
+`run.sh` shells straight into `.venv/bin/local-assistant` — no need to
+`source .venv/bin/activate` first.
 
 Say "hey jarvis", pause briefly, then ask your question.
 
