@@ -69,6 +69,11 @@ class VisionCfg:
 
 
 @dataclass
+class MemoryCfg:
+    dir: str = "memory"
+
+
+@dataclass
 class Config:
     audio: AudioCfg = field(default_factory=AudioCfg)
     wake: WakeCfg = field(default_factory=WakeCfg)
@@ -77,6 +82,7 @@ class Config:
     tts: TTSCfg = field(default_factory=TTSCfg)
     fx: FXCfg = field(default_factory=FXCfg)
     vision: VisionCfg = field(default_factory=VisionCfg)
+    memory: MemoryCfg = field(default_factory=MemoryCfg)
 
 
 def _build(section: dict[str, Any] | None, cls):
@@ -93,4 +99,5 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         tts=_build(raw.get("tts"), TTSCfg),
         fx=_build(raw.get("fx"), FXCfg),
         vision=_build(raw.get("vision"), VisionCfg),
+        memory=_build(raw.get("memory"), MemoryCfg),
     )

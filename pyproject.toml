@@ -17,6 +17,7 @@ dependencies = [
     "pedalboard>=0.9.12",
     "pyyaml>=6.0",
     "silero-vad>=5.1",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.scripts]

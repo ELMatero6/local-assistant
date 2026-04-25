@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -11,6 +12,7 @@ from .audio import MicStream, play_pcm
 from .config import Config, load_config
 from .fx import apply_fx, build_hl1_chain
 from .llm import OllamaClient
+from .memory import MemoryStore
 from .stt import STT, Recorder
 from .tts import TTS, split_sentences_streaming
 from .vision import Webcam
@@ -55,12 +57,13 @@ async def run(cfg: Config) -> None:
     loop = asyncio.get_running_loop()
 
     log.info("Loading models...")
+    memory = MemoryStore(Path(cfg.memory.dir))
     wake = WakeDetector(cfg.wake)
     recorder = Recorder(cfg.stt, sample_rate=cfg.audio.sample_rate)
     stt = STT(cfg.stt)
     tts = TTS(cfg.tts)
     fx_chain = build_hl1_chain(cfg.fx)
-    llm = OllamaClient(cfg.llm)
+    llm = OllamaClient(cfg.llm, memory)
     webcam = Webcam(cfg.vision)
 
     mic = MicStream(

@@ -48,3 +48,6 @@ vision:
   width: 1280
   height: 720
   jpeg_quality: 85
+
+memory:
+  dir: memory             # holds identity.md, notes.md, memory.md (auto-created)
