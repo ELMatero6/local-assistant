@@ -14,7 +14,7 @@ warn() { printf '\033[1;33m!! \033[0m %s\n' "$*" >&2; }
 log "Installing apt packages (sudo)"
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-    python3.12 python3.12-venv python3.12-dev \
+    python3.11 python3.11-venv python3.11-dev \
     build-essential \
     ffmpeg libsndfile1 \
     espeak-ng \
@@ -51,17 +51,18 @@ if ! ollama pull "$MODEL"; then
 fi
 
 # ---- 4. Python venv + project install ---------------------------------------
-# Pick a compatible interpreter (3.10-3.12). Avoid 3.13+ because Kokoro's
-# `misaki` dep doesn't yet ship wheels for them.
+# Pin to Python 3.11. Kokoro's `misaki` caps at <3.13 and openWakeWord's
+# `tflite-runtime` only ships wheels up to cp311; 3.11 is the only version
+# both deps resolve cleanly on.
 PY_BIN=""
-for v in 3.12 3.11 3.10; do
+for v in 3.11 3.10; do
     if command -v "python$v" >/dev/null 2>&1; then
         PY_BIN="python$v"
         break
     fi
 done
 if [ -z "$PY_BIN" ]; then
-    warn "No python3.10-3.12 found on PATH. Install one (e.g. apt install python3.12 python3.12-venv) and re-run."
+    warn "No python3.10/3.11 found on PATH. Install with: sudo apt install python3.11 python3.11-venv python3.11-dev"
     exit 1
 fi
 log "Using interpreter: $PY_BIN ($($PY_BIN --version))"
