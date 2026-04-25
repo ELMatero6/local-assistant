@@ -103,10 +103,43 @@ async def run(cfg: Config) -> None:
         await llm.aclose()
 
 
+def mic_test(cfg: Config, seconds: float) -> None:
+    """List devices, then capture from the configured input and print levels.
+
+    Use this to confirm the mic is actually being heard. Fix `audio.input_device`
+    in config.yaml until you see the rms_peak rise when you talk.
+    """
+    import sounddevice as sd
+
+    print(sd.query_devices())
+    print(f"\nUsing audio.input_device = {cfg.audio.input_device} (None = system default)")
+    print(f"Recording {seconds:.0f}s at {cfg.audio.sample_rate} Hz... talk now.")
+
+    n = int(seconds * cfg.audio.sample_rate)
+    rec = sd.rec(n, samplerate=cfg.audio.sample_rate, channels=1, dtype="int16",
+                 device=cfg.audio.input_device)
+    sd.wait()
+    rec = rec[:, 0]
+
+    peak = int(np.abs(rec).max())
+    rms = float(np.sqrt(np.mean(rec.astype(np.float32) ** 2)))
+    print(f"peak amplitude: {peak} / 32767  (>5000 = healthy speech)")
+    print(f"RMS:            {rms:.0f}        (>500 when talking)")
+    if peak < 200:
+        print("  -> mic is silent. Wrong device or muted.")
+    elif peak < 2000:
+        print("  -> mic is very quiet. Bump system input gain or move closer.")
+    else:
+        print("  -> mic looks fine.")
+
+
 def cli() -> None:
     parser = argparse.ArgumentParser(prog="local-assistant")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("-v", "--verbose", action="store_true")
+    sub = parser.add_subparsers(dest="cmd")
+    mt = sub.add_parser("mic-test", help="Capture from the configured mic and print levels.")
+    mt.add_argument("--seconds", type=float, default=5.0)
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -116,7 +149,10 @@ def cli() -> None:
 
     cfg = load_config(args.config)
     try:
-        asyncio.run(run(cfg))
+        if args.cmd == "mic-test":
+            mic_test(cfg, args.seconds)
+        else:
+            asyncio.run(run(cfg))
     except KeyboardInterrupt:
         sys.exit(0)
 
