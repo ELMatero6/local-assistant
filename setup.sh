@@ -14,7 +14,7 @@ warn() { printf '\033[1;33m!! \033[0m %s\n' "$*" >&2; }
 log "Installing apt packages (sudo)"
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-dev \
+    python3.12 python3.12-venv python3.12-dev \
     build-essential \
     ffmpeg libsndfile1 \
     espeak-ng \
@@ -41,16 +41,44 @@ if command -v systemctl >/dev/null 2>&1; then
     sudo systemctl enable --now ollama || warn "Could not enable ollama service; start it manually."
 fi
 
-MODEL="$(python3 -c 'import yaml,sys; print(yaml.safe_load(open("config.yaml"))["llm"]["model"])' 2>/dev/null || echo gemma4:latest)"
+# Pull the model name out of config.yaml using a quick grep so we don't need
+# pyyaml installed yet (and so this works regardless of which python is default).
+MODEL="$(awk '/^llm:/{f=1;next} f && /^[^ ]/ {f=0} f && /^[[:space:]]+model:/ {gsub(/^[[:space:]]+model:[[:space:]]*/,""); gsub(/[\"'\'']/,""); print; exit}' config.yaml 2>/dev/null)"
+MODEL="${MODEL:-gemma4:latest}"
 log "Pulling Ollama model: $MODEL"
 if ! ollama pull "$MODEL"; then
     warn "ollama pull '$MODEL' failed. Check the tag with 'ollama list' and update config.yaml."
 fi
 
 # ---- 4. Python venv + project install ---------------------------------------
+# Pick a compatible interpreter (3.10-3.12). Avoid 3.13+ because Kokoro's
+# `misaki` dep doesn't yet ship wheels for them.
+PY_BIN=""
+for v in 3.12 3.11 3.10; do
+    if command -v "python$v" >/dev/null 2>&1; then
+        PY_BIN="python$v"
+        break
+    fi
+done
+if [ -z "$PY_BIN" ]; then
+    warn "No python3.10-3.12 found on PATH. Install one (e.g. apt install python3.12 python3.12-venv) and re-run."
+    exit 1
+fi
+log "Using interpreter: $PY_BIN ($($PY_BIN --version))"
+
+# If an existing .venv was created with a different Python, blow it away.
+if [ -d .venv ]; then
+    EXISTING="$(.venv/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")"
+    EXPECTED="$($PY_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    if [ "$EXISTING" != "$EXPECTED" ]; then
+        warn "Existing .venv uses Python $EXISTING but we want $EXPECTED. Recreating."
+        rm -rf .venv
+    fi
+fi
+
 if [ ! -d .venv ]; then
-    log "Creating virtualenv at .venv"
-    python3 -m venv .venv
+    log "Creating virtualenv at .venv with $PY_BIN"
+    "$PY_BIN" -m venv .venv
 else
     log "Reusing existing .venv"
 fi
