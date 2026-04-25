@@ -33,6 +33,7 @@ class STTCfg:
     max_utterance_sec: float = 20.0
     vad_threshold: float = 0.3        # Silero VAD speech probability cutoff
     whisper_vad_filter: bool = False  # second VAD pass inside Whisper; off by default
+    initial_prompt: str = ""          # vocabulary hint to bias Whisper (names, jargon, etc.)
 
 
 @dataclass

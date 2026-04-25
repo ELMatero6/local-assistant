@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +22,16 @@ from .wake import WakeDetector
 
 log = logging.getLogger("assistant")
 chat = logging.getLogger("assistant.chat")
+
+
+def _silence_startup_noise() -> None:
+    """Hide third-party warnings that aren't actionable for our users."""
+    warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+    warnings.filterwarnings("ignore", category=FutureWarning, module="torch")
+    warnings.filterwarnings("ignore", category=UserWarning, module="kokoro")
+    os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 
 
 async def speak_streaming(
@@ -86,14 +98,14 @@ async def run(cfg: Config) -> None:
     try:
         while True:
             await wake.wait_for_wake(mic.queue)
-            log.debug("Wake fired; recording utterance.")
+            chat.info("(listening...)")
             pcm = await recorder.record_utterance(mic.queue)
             log.debug("Recorded %.1fs; transcribing.", pcm.size / cfg.audio.sample_rate)
 
             text = await loop.run_in_executor(None, stt.transcribe, pcm)
             text = text.strip()
             if not text:
-                log.debug("Empty transcript, back to listening.")
+                chat.info("(didn't catch that)")
                 continue
             chat.info("you: %s", text)
 
@@ -167,6 +179,7 @@ def cli() -> None:
             format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         )
     else:
+        _silence_startup_noise()
         # Conversation-only output: terse, no timestamps, no third-party noise.
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         for noisy in (

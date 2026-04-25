@@ -76,5 +76,6 @@ class STT:
             language=self.cfg.language,
             vad_filter=self.cfg.whisper_vad_filter,
             beam_size=1,
+            initial_prompt=self.cfg.initial_prompt or None,
         )
         return " ".join(seg.text.strip() for seg in segments).strip()

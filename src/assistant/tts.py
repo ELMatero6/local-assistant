@@ -17,7 +17,7 @@ class TTS:
 
     def __init__(self, cfg: TTSCfg, lang_code: str = "a"):
         self.cfg = cfg
-        self.pipeline = KPipeline(lang_code=lang_code)
+        self.pipeline = KPipeline(lang_code=lang_code, repo_id="hexgrad/Kokoro-82M")
 
     def synth(self, text: str) -> np.ndarray:
         text = text.strip()

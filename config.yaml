@@ -19,6 +19,7 @@ stt:
   max_utterance_sec: 20
   vad_threshold: 0.3         # Silero VAD speech probability cutoff; lower = catches quieter speech
   whisper_vad_filter: false  # second VAD pass inside Whisper. Off because Recorder already gates.
+  initial_prompt: ""         # vocabulary hint, e.g. "Gordon, Black Mesa, Kleiner, Eli Vance" for HL1 names
 
 llm:
   host: http://localhost:11434
