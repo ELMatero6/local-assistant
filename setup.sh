@@ -91,14 +91,29 @@ log "Upgrading pip + installing project (editable)"
 pip install --upgrade pip wheel
 pip install -e .
 
-# ---- 5. cuDNN sanity --------------------------------------------------------
-log "Probing faster-whisper / cuDNN"
-if ! python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cuda', compute_type='float16')" 2>/dev/null; then
-    warn "faster-whisper float16 on CUDA failed. Trying nvidia-cudnn-cu12..."
-    pip install nvidia-cudnn-cu12 || true
-    if ! python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cuda', compute_type='float16')" 2>/dev/null; then
-        warn "Still failing. Edit config.yaml: set stt.compute_type to int8_float16."
-    fi
+# ---- 5. CUDA runtime libs for faster-whisper --------------------------------
+# CTranslate2 (the engine inside faster-whisper) dlopen's libcublas + libcudnn
+# at GPU inference time. The CUDA toolkit isn't required system-wide; the pip
+# wheels ship the .so files. run.sh prepends them to LD_LIBRARY_PATH.
+log "Installing CUDA runtime libs (nvidia-cublas-cu12, nvidia-cudnn-cu12)"
+pip install "nvidia-cublas-cu12" "nvidia-cudnn-cu12" || \
+    warn "CUDA runtime install failed; faster-whisper will fall back to CPU until fixed."
+
+log "Probing faster-whisper on CUDA"
+if ! ./run.sh --help >/dev/null 2>&1; then
+    warn "run.sh --help failed; investigate before launching."
+fi
+if ! ./.venv/bin/python -c "
+import os, sys
+from pathlib import Path
+base = Path('.venv/lib').glob('python*/site-packages/nvidia')
+extra = ':'.join(str(d) for p in base for d in p.glob('*/lib'))
+os.environ['LD_LIBRARY_PATH'] = extra + ':' + os.environ.get('LD_LIBRARY_PATH', '')
+from faster_whisper import WhisperModel
+WhisperModel('tiny', device='cuda', compute_type='float16')
+print('ok')
+" 2>/dev/null; then
+    warn "faster-whisper float16 on CUDA still failing. Edit config.yaml: set stt.compute_type to int8_float16."
 fi
 
 log "Done. Launch with: ./run.sh"
