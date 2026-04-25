@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from collections import deque
 from typing import AsyncIterator
 
@@ -13,6 +14,8 @@ from .memory import MemoryStore
 
 MEMORY_HITS_PER_TURN = 4
 MAX_TOOL_HOPS = 6
+
+chat = logging.getLogger("assistant.chat")
 
 
 class OllamaClient:
@@ -129,7 +132,34 @@ class OllamaClient:
                     except json.JSONDecodeError:
                         args = {}
                 result = self.memory.dispatch(name, args)
+                ok = not str(result).startswith("error:")
+                chat.info(
+                    "tool: %s(%s) %s %s",
+                    name,
+                    _summarize_args(args),
+                    "->" if ok else "x",
+                    _summarize_result(result, ok),
+                )
                 messages.append({"role": "tool", "content": result})
 
         self.history.append({"role": "user", "content": user_text})
         self.history.append({"role": "assistant", "content": "".join(spoken)})
+
+
+def _summarize_args(args: dict) -> str:
+    parts = []
+    for k, v in args.items():
+        s = str(v).replace("\n", " ")
+        if len(s) > 40:
+            s = s[:37] + "..."
+        parts.append(f"{k}={s!r}" if isinstance(v, str) else f"{k}={s}")
+    return ", ".join(parts)
+
+
+def _summarize_result(result: str, ok: bool) -> str:
+    s = str(result).replace("\n", " ")
+    if not ok:
+        return s if len(s) <= 80 else s[:77] + "..."
+    if s == "ok":
+        return "ok"
+    return f"{len(s)} chars"

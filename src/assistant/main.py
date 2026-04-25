@@ -19,6 +19,7 @@ from .vision import Webcam
 from .wake import WakeDetector
 
 log = logging.getLogger("assistant")
+chat = logging.getLogger("assistant.chat")
 
 
 async def speak_streaming(
@@ -26,16 +27,22 @@ async def speak_streaming(
     tts: TTS,
     fx_chain,
     cfg: Config,
-) -> None:
-    """Buffer streamed tokens by sentence; synthesize + play each one as it lands."""
+) -> str:
+    """Buffer streamed tokens by sentence; synthesize + play each one as it lands.
+
+    Returns the full accumulated reply text.
+    """
     buffer = ""
+    full = ""
     async for token in token_iter:
         buffer += token
+        full += token
         sentences, buffer = split_sentences_streaming(buffer)
         for sentence in sentences:
             await _say(sentence, tts, fx_chain, cfg)
     if buffer.strip():
         await _say(buffer.strip(), tts, fx_chain, cfg)
+    return full.strip()
 
 
 async def _say(text: str, tts: TTS, fx_chain, cfg: Config) -> None:
@@ -56,7 +63,7 @@ async def _say(text: str, tts: TTS, fx_chain, cfg: Config) -> None:
 async def run(cfg: Config) -> None:
     loop = asyncio.get_running_loop()
 
-    log.info("Loading models...")
+    log.debug("Loading models...")
     memory = MemoryStore(Path(cfg.memory.dir))
     wake = WakeDetector(cfg.wake)
     recorder = Recorder(cfg.stt, sample_rate=cfg.audio.sample_rate)
@@ -74,29 +81,31 @@ async def run(cfg: Config) -> None:
         gain=cfg.audio.input_gain,
     )
     mic.start()
-    log.info("Listening for wake word '%s'...", cfg.wake.model)
+    chat.info("listening for '%s'...", cfg.wake.model)
 
     try:
         while True:
             await wake.wait_for_wake(mic.queue)
-            log.info("Wake. Recording utterance...")
+            log.debug("Wake fired; recording utterance.")
             pcm = await recorder.record_utterance(mic.queue)
-            log.info("Recorded %.1fs; transcribing...", pcm.size / cfg.audio.sample_rate)
+            log.debug("Recorded %.1fs; transcribing.", pcm.size / cfg.audio.sample_rate)
 
             text = await loop.run_in_executor(None, stt.transcribe, pcm)
             text = text.strip()
             if not text:
-                log.info("Empty transcript, back to listening.")
+                log.debug("Empty transcript, back to listening.")
                 continue
-            log.info("User: %s", text)
+            chat.info("you: %s", text)
 
             image = None
             if llm.needs_vision(text):
-                log.info("Vision keyword detected; grabbing webcam frame.")
+                log.debug("Vision keyword detected; grabbing webcam frame.")
                 image = await loop.run_in_executor(None, webcam.grab_jpeg)
 
             try:
-                await speak_streaming(llm.stream_reply(text, image), tts, fx_chain, cfg)
+                reply = await speak_streaming(llm.stream_reply(text, image), tts, fx_chain, cfg)
+                if reply:
+                    chat.info("assistant: %s", reply)
             except Exception:
                 log.exception("LLM/TTS error")
     finally:
@@ -148,10 +157,23 @@ def cli() -> None:
     mt.add_argument("--seconds", type=float, default=5.0)
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    if args.verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
+    else:
+        # Conversation-only output: terse, no timestamps, no third-party noise.
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        for noisy in (
+            "httpx", "httpcore", "urllib3",
+            "faster_whisper", "openwakeword", "silero_vad",
+            "kokoro", "phonemizer", "asyncio",
+        ):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+        # Suppress our own scaffolding logs; only the chat sub-logger speaks.
+        logging.getLogger("assistant").setLevel(logging.WARNING)
+        logging.getLogger("assistant.chat").setLevel(logging.INFO)
 
     cfg = load_config(args.config)
     try:
