@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 
 import numpy as np
 from openwakeword.model import Model
+from openwakeword.utils import download_models
 
 from .config import WakeCfg
 
@@ -20,6 +22,10 @@ class WakeDetector:
 
     def __init__(self, cfg: WakeCfg):
         self.cfg = cfg
+        # openWakeWord wheels don't include the model files (wake-word .onnx
+        # plus the shared melspec / embedding helpers). Download is idempotent.
+        if not Path(cfg.model).is_file():
+            download_models()
         self.model = Model(wakeword_models=[cfg.model], inference_framework="onnx")
         self._last_fire = 0.0
 
