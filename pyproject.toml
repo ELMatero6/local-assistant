@@ -1,0 +1,30 @@
+[project]
+name = "local-assistant"
+version = "0.1.0"
+description = "Local voice assistant: Whisper STT -> Ollama (Gemma) -> Kokoro TTS with HL1 tram FX"
+requires-python = ">=3.10"
+dependencies = [
+    "openwakeword>=0.6.0",
+    "faster-whisper>=1.0.3",
+    "sounddevice>=0.4.7",
+    "soundfile>=0.12.1",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "httpx>=0.27",
+    "opencv-python>=4.10",
+    "pillow>=10.3",
+    "kokoro>=0.7.16",
+    "pedalboard>=0.9.12",
+    "pyyaml>=6.0",
+    "silero-vad>=5.1",
+]
+
+[project.scripts]
+local-assistant = "assistant.main:cli"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

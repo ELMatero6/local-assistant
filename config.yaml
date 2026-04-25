@@ -1,0 +1,50 @@
+audio:
+  input_device: null      # null = system default; set to int index from `python -m sounddevice`
+  output_device: null
+  sample_rate: 16000      # mic capture rate; openWakeWord + Whisper both want 16k
+  playback_rate: 24000    # Kokoro outputs 24k
+
+wake:
+  model: hey_jarvis       # bundled openWakeWord model. swap for a custom .onnx for "hey gordon"
+  threshold: 0.5
+  cooldown_sec: 1.5
+
+stt:
+  model: large-v3         # faster-whisper model size: tiny|base|small|medium|large-v3|distil-large-v3
+  device: cuda
+  compute_type: float16
+  language: en
+  silence_timeout_sec: 1.2   # cut recording after this much trailing silence
+  max_utterance_sec: 20
+
+llm:
+  host: http://localhost:11434
+  model: gemma4:latest
+  system_prompt: |
+    You are the announcer for the Black Mesa transit system, repurposed as a personal
+    assistant. Speak in short, clipped sentences like a public-address announcement.
+    Be concise. One or two sentences per reply unless asked for detail.
+  vision_keywords: [look, see, show, what is, what's this, describe, in front, camera, webcam]
+  context_messages: 8     # number of prior turns kept in history
+
+tts:
+  voice: am_michael       # Kokoro voices: af_*, am_*, bf_*, bm_*. am_michael ~ deep US male.
+  speed: 1.0
+
+fx:
+  # Hard-coded HL1 tram preset; tweakable here if you want.
+  highpass_hz: 300
+  lowpass_hz: 3200
+  bitcrush_bits: 10
+  drive_db: 8
+  reverb_room_size: 0.18
+  reverb_damping: 0.7
+  reverb_wet: 0.14
+  reverb_dry: 0.85
+  output_gain_db: 2
+
+vision:
+  device_index: 0
+  width: 1280
+  height: 720
+  jpeg_quality: 85
