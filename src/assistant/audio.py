@@ -38,10 +38,24 @@ class MicStream:
         if self.gain != 1.0:
             scaled = chunk.astype(np.int32) * self.gain
             chunk = np.clip(scaled, -32768, 32767).astype(np.int16)
+        # The actual put runs on the loop thread, so swallow QueueFull there
+        # rather than in this callback (where it would never fire).
+        self.loop.call_soon_threadsafe(self._enqueue, chunk)
+
+    def _enqueue(self, chunk: np.ndarray) -> None:
         try:
-            self.loop.call_soon_threadsafe(self.queue.put_nowait, chunk)
+            self.queue.put_nowait(chunk)
         except asyncio.QueueFull:
             pass
+
+    def drain(self) -> None:
+        """Drop any audio frames currently buffered. Call after TTS playback so
+        the model doesn't hear its own voice (or echo) on the next turn."""
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
     def start(self) -> None:
         self._stream = sd.InputStream(

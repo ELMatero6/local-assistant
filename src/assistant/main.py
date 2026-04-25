@@ -108,6 +108,10 @@ async def run(cfg: Config) -> None:
                     chat.info("assistant: %s", reply)
             except Exception:
                 log.exception("LLM/TTS error")
+            finally:
+                # Drop frames captured while we were speaking so the next wake
+                # cycle doesn't fire on our own voice or stale echo.
+                mic.drain()
     finally:
         mic.stop()
         await llm.aclose()
