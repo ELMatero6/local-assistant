@@ -30,7 +30,7 @@ class TTS:
     SAMPLE_RATE = 24000  # F5-TTS Base outputs 24 kHz; updated after first synth
 
     def __init__(self, cfg: TTSCfg):
-        from f5_tts import F5TTS
+        from f5_tts.api import F5TTS
 
         self.cfg = cfg
         if not cfg.ref_text.strip():
