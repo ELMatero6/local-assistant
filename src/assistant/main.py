@@ -62,7 +62,8 @@ async def _say(text: str, tts: TTS, fx_chain, cfg: Config) -> None:
     pcm = await loop.run_in_executor(None, tts.synth, text)
     if pcm.size == 0:
         return
-    pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
+    if fx_chain is not None:
+        pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
     await loop.run_in_executor(
         None,
         play_pcm,
@@ -81,7 +82,7 @@ async def run(cfg: Config) -> None:
     recorder = Recorder(cfg.stt, sample_rate=cfg.audio.sample_rate)
     stt = STT(cfg.stt)
     tts = TTS(cfg.tts)
-    fx_chain = build_hl1_chain(cfg.fx)
+    fx_chain = build_hl1_chain(cfg.fx) if cfg.fx.enabled else None
     llm = OllamaClient(cfg.llm, memory)
     webcam = Webcam(cfg.vision)
 

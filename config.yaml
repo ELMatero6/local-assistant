@@ -6,7 +6,10 @@ audio:
   input_gain: 1.0         # software gain for quiet mics; bump to 4-8 if alsamixer can't get loud enough
 
 wake:
-  model: hey_jarvis       # bundled openWakeWord model. swap for a custom .onnx for "hey gordon"
+  # Bundled names: alexa | hey_jarvis | hey_mycroft | hey_rhasspy.
+  # Or point at a custom-trained .onnx path: wake/hey_dave.onnx (see wake/README.md).
+  # Falls back to hey_jarvis if the path doesn't exist.
+  model: wake/hey_dave.onnx
   threshold: 0.5
   cooldown_sec: 1.5
 
@@ -24,19 +27,28 @@ stt:
 llm:
   host: http://localhost:11434
   model: gemma4:latest
-  system_prompt: |
-    You are the announcer for the Black Mesa transit system, repurposed as a personal
-    assistant. Speak in short, clipped sentences like a public-address announcement.
-    Be concise. One or two sentences per reply unless asked for detail.
+  system_prompt: ""        # leave blank: identity.md is the model's self-description and it owns it
   vision_keywords: [look, see, show, what is, what's this, describe, in front, camera, webcam]
   context_messages: 8     # number of prior turns kept in history
 
 tts:
-  voice: am_michael       # Kokoro voices: af_*, am_*, bf_*, bm_*. am_michael ~ deep US male.
-  speed: 1.0
+  model_id: Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  device: cuda:0
+  dtype: bfloat16                # bfloat16 | float16 | float32
+  attn_implementation: sdpa      # use "flash_attention_2" if you've installed flash-attn
+  language: English
+  ref_audio: dave.mp3            # reference voice clip for cloning (file path)
+  ref_text: |                    # exact transcript of ref_audio
+    Hello, me. Meet the real me. Hey, I'm Dave Mustaine from Megadeth, and this is Cameo.
+    I'd like to invite you to send a greeting from me to your friends, such as a birthday
+    greeting, a wedding, a Christmas, divorced as fuck, something like that. You know
+    what you want to say. Just get creative. Anyways, thanks for reaching out to me.
+    Welcome to Cameo, and have a great 2022.
 
 fx:
-  # Hard-coded HL1 tram preset; tweakable here if you want.
+  # HL1 tram-PA chain. Off by default so the cloned voice stays clean; flip
+  # `enabled: true` if you want the announcer-radio coloration on top.
+  enabled: false
   highpass_hz: 300
   lowpass_hz: 3200
   bitcrush_bits: 10

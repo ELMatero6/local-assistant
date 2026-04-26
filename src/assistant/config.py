@@ -47,12 +47,18 @@ class LLMCfg:
 
 @dataclass
 class TTSCfg:
-    voice: str = "am_michael"
-    speed: float = 1.0
+    model_id: str = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+    device: str = "cuda:0"
+    dtype: str = "bfloat16"               # bfloat16|float16|float32
+    attn_implementation: str = "sdpa"     # "flash_attention_2" if you've installed flash-attn
+    language: str = "English"
+    ref_audio: str = "dave.mp3"           # file path to the reference voice clip
+    ref_text: str = ""                    # transcript of ref_audio (required for cloning)
 
 
 @dataclass
 class FXCfg:
+    enabled: bool = False                 # default off: clean cloned voice. Flip on for HL1 PA tone.
     highpass_hz: float = 300
     lowpass_hz: float = 3200
     bitcrush_bits: int = 10

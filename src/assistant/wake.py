@@ -23,13 +23,29 @@ class WakeDetector:
 
     FRAME_SAMPLES = 1280  # 80 ms at 16 kHz
 
+    BUNDLED = {"alexa", "hey_jarvis", "hey_mycroft", "hey_rhasspy", "weasley", "timer"}
+
     def __init__(self, cfg: WakeCfg):
         self.cfg = cfg
-        # openWakeWord wheels don't include the model files (wake-word .onnx
-        # plus the shared melspec / embedding helpers). Download is idempotent.
-        if not Path(cfg.model).is_file():
-            download_models()
-        self.model = Model(wakeword_models=[cfg.model], inference_framework="onnx")
+        # cfg.model is either a project-local .onnx path (custom-trained, e.g.
+        # wake/hey_dave.onnx) or one of the bundled names. The shared melspec /
+        # embedding helpers always need to be downloaded the first time.
+        download_models()
+        path = Path(cfg.model)
+        if path.is_file():
+            wake_models = [str(path.resolve())]
+        elif cfg.model in self.BUNDLED:
+            wake_models = [cfg.model]
+        else:
+            log.warning(
+                "Wake model %r is neither a bundled name nor an existing file; "
+                "falling back to 'hey_jarvis'. Train a custom model and drop it "
+                "at the configured path to use your own.",
+                cfg.model,
+            )
+            wake_models = ["hey_jarvis"]
+        log.info("Wake model: %s", wake_models[0])
+        self.model = Model(wakeword_models=wake_models, inference_framework="onnx")
         self._last_fire = 0.0
 
     async def wait_for_wake(self, mic_queue: asyncio.Queue[np.ndarray]) -> None:

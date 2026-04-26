@@ -3,13 +3,19 @@
 Local voice assistant that pipes:
 
 ```
-mic -> openWakeWord -> faster-whisper STT -> Ollama (gemma4) -> Kokoro TTS -> HL1 tram FX -> speaker
+mic -> openWakeWord -> faster-whisper STT -> Ollama (gemma4) -> Qwen3-TTS (voice clone) -> speaker
 ```
 
-The model has persistent memory across sessions (`identity.md` + `notes.md` +
-`memory.md`) and can edit/search those files via tool calls. It can also grab
-a webcam frame on demand when you say things like "look at this", "describe
-what you see", etc. Everything runs locally.
+The TTS clones any reference voice you point it at (default: `dave.mp3` —
+Dave Mustaine). The model has persistent memory across sessions
+(`identity.md` + `notes.md` + `memory.md`) and can edit/search those files
+via tool calls. It can also grab a webcam frame on demand when you say
+things like "look at this", "describe what you see", etc. Everything runs
+locally.
+
+The HL1 tram-PA effects chain is still in the codebase but disabled by
+default — flip `fx.enabled: true` in `config.yaml` to layer it on top of
+the cloned voice.
 
 ## Ubuntu setup
 
@@ -139,10 +145,20 @@ change, so nothing else needs to know.
 
 ## Custom wake word
 
-`hey_jarvis` ships with openWakeWord. For a real HL1 "hey gordon", follow the
-openWakeWord training notebook
-(<https://github.com/dscripka/openWakeWord#training-new-models>), drop the
-resulting `.onnx` into the project, and point `wake.model` at its path.
+The default config expects `wake/hey_dave.onnx` and falls back to bundled
+`hey_jarvis` (with a warning) until you train your own. See
+[`wake/README.md`](wake/README.md) for the openWakeWord training pipeline
+— ~30 min on a free Colab T4, fully local once trained.
+
+## Voice cloning reference audio
+
+`tts.ref_audio` (default: `dave.mp3`) is the file the cloned voice is
+copied from. `tts.ref_text` is the **exact transcript** of that file —
+the model uses it to align the speaker embedding. If you replace the
+voice, also replace the transcript.
+
+3-30 s of clean speech is the sweet spot. Mp3, wav, or any libsndfile
+format works.
 
 ## VRAM footprint
 
@@ -152,7 +168,7 @@ Rough split on a single 3090 (24 GB):
 |-----------------------------------|---------|
 | Ollama: gemma4:latest             | ~10 GB  |
 | faster-whisper large-v3 (fp16)    | ~3 GB   |
-| Kokoro                            | <1 GB   |
+| Qwen3-TTS-12Hz-0.6B (bf16)        | ~1.5 GB |
 | openWakeWord                      | CPU     |
 | BM25 memory index                 | CPU     |
 
@@ -168,8 +184,8 @@ src/assistant/
   llm.py      Ollama streaming client + tool-call loop (text + vision)
   memory.py   identity/notes/memory store, BM25 search, tool dispatch
   vision.py   on-demand webcam JPEG grab
-  tts.py      Kokoro pipeline + sentence splitter for streaming
-  fx.py       Pedalboard HL1 tram-PA chain
+  tts.py      Qwen3-TTS voice-clone pipeline + sentence splitter for streaming
+  fx.py       Pedalboard HL1 tram-PA chain (disabled by default)
   main.py     async orchestrator + CLI entrypoint
 memory/
   identity.md notes.md memory.md
