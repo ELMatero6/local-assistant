@@ -49,7 +49,7 @@ class LLMCfg:
 
 @dataclass
 class TTSCfg:
-    model: str = "F5-TTS"                  # SWivid model_type: "F5-TTS" or "E2-TTS"
+    model: str = "F5TTS_v1_Base"          # F5-TTS checkpoint (F5TTS_v1_Base | F5TTS_Base | E2TTS_Base)
     device: str = "cuda"                  # "cuda" or "cpu"
     ref_audio: str = "dave.mp3"           # file path to the reference voice clip
     ref_text: str = ""                    # transcript of ref_audio (required for cloning)

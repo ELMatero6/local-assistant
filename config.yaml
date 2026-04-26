@@ -34,7 +34,7 @@ llm:
   context_messages: 8     # number of prior turns kept in history
 
 tts:
-  model: F5-TTS                  # SWivid model_type: "F5-TTS" or "E2-TTS"
+  model: F5TTS_v1_Base           # F5-TTS checkpoint name (e.g. F5TTS_v1_Base, F5TTS_Base, E2TTS_Base)
   device: cuda                   # cuda | cpu
   ref_audio: dave.mp3            # reference voice clip for cloning (file path)
   ref_text: |                    # exact transcript of ref_audio (3-15 s of clean speech is best)

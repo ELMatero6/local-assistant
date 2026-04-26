@@ -46,7 +46,7 @@ class TTS:
             torch.backends.cudnn.benchmark = True
 
         log.info("Loading F5-TTS (%s)...", cfg.model)
-        self.model = F5TTS(model_type=cfg.model, device=cfg.device)
+        self.model = F5TTS(model=cfg.model, device=cfg.device)
 
         if cfg.prewarm:
             log.info("Pre-warming TTS (first synth is always slowest)...")
