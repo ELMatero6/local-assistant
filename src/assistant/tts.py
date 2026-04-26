@@ -77,7 +77,7 @@ class TTS:
             cfg.model,
             device_map=device_map,
             dtype=torch.bfloat16,
-            attn_implementation="sdpa",
+            attn_implementation="flash_attention_3",
         )
 
         if cfg.prewarm:
