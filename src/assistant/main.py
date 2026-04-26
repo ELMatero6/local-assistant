@@ -299,6 +299,7 @@ def cli() -> None:
             "httpx", "httpcore", "urllib3",
             "faster_whisper", "openwakeword", "silero_vad",
             "kokoro", "phonemizer", "asyncio",
+            "transformers", "transformers.generation", "tokenizers",
         ):
             logging.getLogger(noisy).setLevel(logging.WARNING)
         # Suppress our own scaffolding logs; only the chat sub-logger speaks.

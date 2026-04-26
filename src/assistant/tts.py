@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -80,6 +81,10 @@ class TTS:
             attn_implementation="flash_attention_2",
         )
 
+        # Serializes synth calls so a cancelled-but-still-running thread can't
+        # overlap with the next turn's synthesis (which would segfault the GPU model).
+        self._lock = threading.Lock()
+
         if cfg.prewarm:
             log.info("Pre-warming TTS (first synth is always slowest)...")
             t0 = time.perf_counter()
@@ -90,6 +95,10 @@ class TTS:
         text = text.strip()
         if not text:
             return np.zeros(0, dtype=np.float32)
+        with self._lock:
+            return self._synth_locked(text)
+
+    def _synth_locked(self, text: str) -> np.ndarray:
         t0 = time.perf_counter()
         wavs, sr = self.model.generate_voice_clone(
             text=text,
