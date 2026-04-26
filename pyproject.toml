@@ -1,7 +1,7 @@
 [project]
 name = "local-assistant"
 version = "0.1.0"
-description = "Local voice assistant: Whisper STT -> Ollama (Gemma) -> Qwen3-TTS voice cloning"
+description = "Local voice assistant: Whisper STT -> Ollama (Gemma) -> F5-TTS voice cloning"
 requires-python = ">=3.10,<3.12"
 dependencies = [
     "openwakeword>=0.6.0",
@@ -13,9 +13,7 @@ dependencies = [
     "httpx>=0.27",
     "opencv-python>=4.10",
     "pillow>=10.3",
-    "qwen-tts>=0.1.0",
-    "transformers>=4.45",
-    "accelerate>=0.34",
+    "f5-tts>=1.0.0",
     "pedalboard>=0.9.12",
     "pyyaml>=6.0",
     "silero-vad>=5.1",

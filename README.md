@@ -3,7 +3,7 @@
 Local voice assistant that pipes:
 
 ```
-mic -> openWakeWord -> faster-whisper STT -> Ollama (gemma4) -> Qwen3-TTS (voice clone) -> speaker
+mic -> openWakeWord -> faster-whisper STT -> Ollama (gemma4) -> F5-TTS (voice clone) -> speaker
 ```
 
 The TTS clones any reference voice you point it at (default: `dave.mp3` —
@@ -152,21 +152,17 @@ The default config expects `wake/hey_dave.onnx` and falls back to bundled
 
 ## TTS speed
 
-Qwen3-TTS-0.6B on a 3090 with default `sdpa` attention runs in roughly
-real time per sentence. The biggest single speedup is FlashAttention 2:
-
-```bash
-sudo apt install -y nvidia-cuda-toolkit          # ~1 GB; provides nvcc
-source .venv/bin/activate
-pip install flash-attn --no-build-isolation     # ~5 min compile on a 3090
-```
-
-Then in `config.yaml`:
+F5-TTS uses 32 diffusion steps per call (`nfe_step`). On a 3090 expect
+roughly 1.5-3× realtime per sentence with the default settings. The
+fastest dial is dropping `nfe_step`:
 
 ```yaml
 tts:
-  attn_implementation: flash_attention_2
+  nfe_step: 16          # ~2x faster, still solid quality
+  # nfe_step: 8          # ~4x faster, audibly rougher
 ```
+
+Quality / speed tradeoff is purely runtime — no reload needed.
 
 Other levers already on by default:
 - `tts.prewarm: true` — synthesize a throwaway phrase at startup so the
@@ -214,7 +210,7 @@ Rough split on a single 3090 (24 GB):
 |-----------------------------------|---------|
 | Ollama: gemma4:latest             | ~10 GB  |
 | faster-whisper large-v3 (fp16)    | ~3 GB   |
-| Qwen3-TTS-12Hz-0.6B (bf16)        | ~1.5 GB |
+| F5-TTS_v1_Base + Vocos vocoder    | ~2-3 GB |
 | openWakeWord                      | CPU     |
 | BM25 memory index                 | CPU     |
 
@@ -230,7 +226,7 @@ src/assistant/
   llm.py      Ollama streaming client + tool-call loop (text + vision)
   memory.py   identity/notes/memory store, BM25 search, tool dispatch
   vision.py   on-demand webcam JPEG grab
-  tts.py      Qwen3-TTS voice-clone pipeline + sentence splitter for streaming
+  tts.py      F5-TTS voice-clone pipeline + sentence splitter for streaming
   fx.py       Pedalboard HL1 tram-PA chain (disabled by default)
   main.py     async orchestrator + CLI entrypoint
 memory/

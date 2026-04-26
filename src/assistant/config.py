@@ -49,14 +49,16 @@ class LLMCfg:
 
 @dataclass
 class TTSCfg:
-    model_id: str = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
-    device: str = "cuda:0"
-    dtype: str = "bfloat16"               # bfloat16|float16|float32
-    attn_implementation: str = "sdpa"     # "flash_attention_2" if you've installed flash-attn
-    language: str = "English"
+    model: str = "F5TTS_v1_Base"          # F5-TTS checkpoint name
+    device: str = "cuda"                  # "cuda" or "cpu"
     ref_audio: str = "dave.mp3"           # file path to the reference voice clip
     ref_text: str = ""                    # transcript of ref_audio (required for cloning)
     prewarm: bool = True                  # synthesize a throwaway phrase at startup to JIT kernels
+    nfe_step: int = 32                    # diffusion steps; lower = faster / less detailed (try 16)
+    cfg_strength: float = 2.0             # classifier-free guidance; higher = closer to ref voice
+    speed: float = 1.0                    # 1.0 = same tempo as ref; <1 slower, >1 faster
+    cross_fade_duration: float = 0.15     # crossfade between F5's internal text chunks
+    seed: int | None = None               # set int for reproducible voice; null = random
 
 
 @dataclass
