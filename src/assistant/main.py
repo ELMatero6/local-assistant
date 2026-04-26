@@ -38,10 +38,24 @@ def _silence_startup_noise() -> None:
 
 
 _NOISY_LINES = (
+    # Qwen3-TTS / CosyVoice2 init chatter
     "code_predictor_config is None",
     "Initializing code_predictor model",
+    "talker_config is None",
+    "Initializing talker model",
+    "speaker_encoder_config is None",
+    "encoder_config is None",
+    "decoder_config is None",
     "Setting `pad_token_id`",
     "Setting pad_token_id",
+    # F5-TTS optional-dependency warnings
+    "Warning: flash-attn is not installed",
+    "SoX could not be found",
+    "sox: not found",
+    "If you do not have SoX",
+    "http://sox.sourceforge.net",
+    "If you do (or think",
+    "path variables",
 )
 
 

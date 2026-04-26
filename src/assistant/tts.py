@@ -15,11 +15,6 @@ log = logging.getLogger("assistant.tts")
 _SENTENCE_END = re.compile(r"([\.!\?])\s+")
 
 
-def _silent_progress(iterable, **_kwargs):
-    """Pass-through replacement for tqdm so F5-TTS doesn't print progress bars."""
-    return iterable
-
-
 def _silent_info(*_args, **_kwargs) -> None:
     pass
 
@@ -30,7 +25,11 @@ class TTS:
     SAMPLE_RATE = 24000  # F5-TTS Base outputs 24 kHz; updated after first synth
 
     def __init__(self, cfg: TTSCfg):
-        from f5_tts.api import F5TTS
+        # SWivid's F5-TTS exposes F5TTS in f5_tts.api; older/fallback builds may skip the submodule.
+        try:
+            from f5_tts.api import F5TTS
+        except ImportError:
+            from f5_tts import F5TTS  # type: ignore[no-redef]
 
         self.cfg = cfg
         if not cfg.ref_text.strip():
@@ -47,7 +46,7 @@ class TTS:
             torch.backends.cudnn.benchmark = True
 
         log.info("Loading F5-TTS (%s)...", cfg.model)
-        self.model = F5TTS(model=cfg.model, device=cfg.device)
+        self.model = F5TTS(model_type=cfg.model, device=cfg.device)
 
         if cfg.prewarm:
             log.info("Pre-warming TTS (first synth is always slowest)...")
@@ -68,9 +67,8 @@ class TTS:
             cfg_strength=self.cfg.cfg_strength,
             speed=self.cfg.speed,
             cross_fade_duration=self.cfg.cross_fade_duration,
-            seed=self.cfg.seed,
+            seed=self.cfg.seed if self.cfg.seed is not None else -1,
             show_info=_silent_info,
-            progress=_silent_progress,
             progress=None,
         )
         self.SAMPLE_RATE = int(sr)
