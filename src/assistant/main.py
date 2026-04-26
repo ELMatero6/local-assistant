@@ -115,23 +115,21 @@ async def speak_streaming(
 
     async def _produce() -> None:
         buffer = ""
+    
         async for token in token_iter:
             buffer += token
             full_parts.append(token)
-            sentences, buffer = split_sentences_streaming(buffer)
-            for s in sentences:
-                pcm = await loop.run_in_executor(None, tts.synth, s)
-                if pcm.size == 0:
-                    continue
-                if fx_chain is not None:
-                    pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
-                await audio_q.put(pcm)
-        if buffer.strip():
-            pcm = await loop.run_in_executor(None, tts.synth, buffer.strip())
+    
+        text = buffer.strip()
+    
+        if text:
+            pcm = await loop.run_in_executor(None, tts.synth, text)
+    
             if pcm.size > 0:
                 if fx_chain is not None:
                     pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
                 await audio_q.put(pcm)
+    
         await audio_q.put(None)
 
     async def _consume() -> None:
