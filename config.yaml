@@ -41,7 +41,7 @@ tts:
   language: English
   ref_audio: dave.mp3            # reference voice clip for cloning (file path)
   ref_text: |                    # exact transcript of ref_audio
-    Hello, me. Meet the real me. Hey, I'm Dave Mustaine from Megadeth, and this is Cameo.
+    Hey, I'm Dave Mustaine from Megadeth, and this is Cameo.
     I'd like to invite you to send a greeting from me to your friends, such as a birthday
     greeting, a wedding, a Christmas, divorced as fuck, something like that. You know
     what you want to say. Just get creative. Anyways, thanks for reaching out to me.
