@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,11 @@ class TTS:
                 "Put the reference voice clip there or change the path in config.yaml."
             )
 
+        # Ampere+ matmul win: tradeoff a bit of fp32 precision for ~10-20% speed.
+        torch.set_float32_matmul_precision("high")
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = True
+
         log.info("Loading Qwen3-TTS (%s)...", cfg.model_id)
         self.model = Qwen3TTSModel.from_pretrained(
             cfg.model_id,
@@ -43,10 +49,17 @@ class TTS:
             attn_implementation=cfg.attn_implementation,
         )
 
+        if cfg.prewarm:
+            log.info("Pre-warming TTS (first synth is always slowest)...")
+            t0 = time.perf_counter()
+            _ = self.synth("Initializing.")
+            log.info("Pre-warm took %.2fs", time.perf_counter() - t0)
+
     def synth(self, text: str) -> np.ndarray:
         text = text.strip()
         if not text:
             return np.zeros(0, dtype=np.float32)
+        t0 = time.perf_counter()
         wavs, sr = self.model.generate_voice_clone(
             text=text,
             language=self.cfg.language,
@@ -55,6 +68,12 @@ class TTS:
         )
         self.SAMPLE_RATE = int(sr)
         audio = np.asarray(wavs[0], dtype=np.float32)
+        elapsed = time.perf_counter() - t0
+        rt = audio.size / self.SAMPLE_RATE if self.SAMPLE_RATE else 0
+        log.debug(
+            "synth %.2fs -> %.2fs audio (%.2fx realtime) for %d chars",
+            elapsed, rt, rt / elapsed if elapsed else 0, len(text),
+        )
         # Defensive clip in case the model outputs something out-of-range.
         return np.clip(audio, -1.0, 1.0)
 

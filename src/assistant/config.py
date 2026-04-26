@@ -21,6 +21,8 @@ class WakeCfg:
     model: str = "hey_jarvis"
     threshold: float = 0.5
     cooldown_sec: float = 1.5
+    interrupt_vad_threshold: float = 0.7  # speech prob to trigger barge-in during TTS
+    interrupt_min_frames: int = 4         # consecutive speech frames needed (~320 ms)
 
 
 @dataclass
@@ -54,6 +56,7 @@ class TTSCfg:
     language: str = "English"
     ref_audio: str = "dave.mp3"           # file path to the reference voice clip
     ref_text: str = ""                    # transcript of ref_audio (required for cloning)
+    prewarm: bool = True                  # synthesize a throwaway phrase at startup to JIT kernels
 
 
 @dataclass

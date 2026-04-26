@@ -150,6 +150,52 @@ The default config expects `wake/hey_dave.onnx` and falls back to bundled
 [`wake/README.md`](wake/README.md) for the openWakeWord training pipeline
 — ~30 min on a free Colab T4, fully local once trained.
 
+## TTS speed
+
+Qwen3-TTS-0.6B on a 3090 with default `sdpa` attention runs in roughly
+real time per sentence. The biggest single speedup is FlashAttention 2:
+
+```bash
+sudo apt install -y nvidia-cuda-toolkit          # ~1 GB; provides nvcc
+source .venv/bin/activate
+pip install flash-attn --no-build-isolation     # ~5 min compile on a 3090
+```
+
+Then in `config.yaml`:
+
+```yaml
+tts:
+  attn_implementation: flash_attention_2
+```
+
+Other levers already on by default:
+- `tts.prewarm: true` — synthesize a throwaway phrase at startup so the
+  first real reply isn't slow due to kernel JIT + cuDNN autotune.
+- `torch.set_float32_matmul_precision("high")` — Ampere TF32 matmuls.
+- `cudnn.benchmark = True` — picks the fastest conv algorithm per input.
+
+To see actual per-synth times run with `-v`:
+
+```
+synth 0.42s -> 1.85s audio (4.40x realtime) for 38 chars
+```
+
+## Barge-in (interruption)
+
+Start talking while the assistant is speaking; it stops mid-word, drops
+the in-flight LLM stream, and waits for "hey dave" again to start a new
+turn. Tunable in `config.yaml`:
+
+```yaml
+wake:
+  interrupt_vad_threshold: 0.7    # stricter than recorder's so we don't trip on our own voice
+  interrupt_min_frames: 4         # ~320 ms of consistent speech needed
+```
+
+If the model interrupts itself when you have speakers (echo back into
+the webcam mic), raise `interrupt_vad_threshold` toward 0.85, lower mic
+gain, or use headphones.
+
 ## Voice cloning reference audio
 
 `tts.ref_audio` (default: `dave.mp3`) is the file the cloned voice is

@@ -12,6 +12,8 @@ wake:
   model: wake/hey_dave.onnx
   threshold: 0.5
   cooldown_sec: 1.5
+  interrupt_vad_threshold: 0.7    # stricter than recorder's so TTS bleed into the mic doesn't self-trip
+  interrupt_min_frames: 4         # ~320 ms of consistent speech to trigger barge-in
 
 stt:
   model: large-v3         # faster-whisper model size: tiny|base|small|medium|large-v3|distil-large-v3
@@ -44,6 +46,7 @@ tts:
     greeting, a wedding, a Christmas, divorced as fuck, something like that. You know
     what you want to say. Just get creative. Anyways, thanks for reaching out to me.
     Welcome to Cameo, and have a great 2022.
+  prewarm: true                  # synthesize a throwaway phrase at startup; makes the first real reply fast
 
 fx:
   # HL1 tram-PA chain. Off by default so the cloned voice stays clean; flip

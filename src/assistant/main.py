@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
+import sounddevice as sd
+
 from .audio import MicStream, play_pcm
 from .config import Config, load_config
 from .fx import apply_fx, build_hl1_chain
@@ -103,13 +105,45 @@ async def _say(text: str, tts: TTS, fx_chain, cfg: Config) -> None:
         return
     if fx_chain is not None:
         pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
-    await loop.run_in_executor(
-        None,
-        play_pcm,
-        pcm,
-        tts.SAMPLE_RATE,
-        cfg.audio.output_device,
-    )
+    try:
+        await loop.run_in_executor(
+            None,
+            play_pcm,
+            pcm,
+            tts.SAMPLE_RATE,
+            cfg.audio.output_device,
+        )
+    except asyncio.CancelledError:
+        # Interrupted by user; cut playback immediately.
+        sd.stop()
+        raise
+
+
+async def _watch_for_interrupt(
+    mic: MicStream,
+    recorder: Recorder,
+    cfg: Config,
+) -> None:
+    """Consume mic frames during TTS; trigger barge-in if the user starts talking.
+
+    Uses Silero VAD with a higher threshold than the recorder's so the model
+    doesn't trip on its own voice bleeding through speakers.
+    """
+    needed = cfg.wake.interrupt_min_frames
+    threshold = cfg.wake.interrupt_vad_threshold
+    speech_run = 0
+    while True:
+        frame = await mic.queue.get()
+        # Reuse Recorder's VAD; override the threshold for stricter detection.
+        prev_thr = recorder.cfg.vad_threshold
+        try:
+            recorder.cfg.vad_threshold = threshold
+            is_speech = recorder._frame_has_speech(frame)
+        finally:
+            recorder.cfg.vad_threshold = prev_thr
+        speech_run = speech_run + 1 if is_speech else 0
+        if speech_run >= needed:
+            return  # caller handles the cancellation
 
 
 async def run(cfg: Config) -> None:
@@ -155,9 +189,34 @@ async def run(cfg: Config) -> None:
                 image = await loop.run_in_executor(None, webcam.grab_jpeg)
 
             try:
-                reply = await speak_streaming(llm.stream_reply(text, image), tts, fx_chain, cfg)
-                if reply:
-                    chat.info("assistant: %s", reply)
+                token_iter = llm.stream_reply(text, image)
+                speak_task = asyncio.create_task(
+                    speak_streaming(token_iter, tts, fx_chain, cfg)
+                )
+                watch_task = asyncio.create_task(
+                    _watch_for_interrupt(mic, recorder, cfg)
+                )
+                done, _ = await asyncio.wait(
+                    {speak_task, watch_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if watch_task in done and not speak_task.done():
+                    sd.stop()
+                    speak_task.cancel()
+                    try:
+                        await speak_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    chat.info("(interrupted)")
+                else:
+                    watch_task.cancel()
+                    try:
+                        await watch_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    reply = speak_task.result() if speak_task.done() and not speak_task.cancelled() else ""
+                    if reply:
+                        chat.info("assistant: %s", reply)
             except Exception:
                 log.exception("LLM/TTS error")
             finally:
