@@ -71,6 +71,7 @@ class TTS:
             seed=self.cfg.seed,
             show_info=_silent_info,
             progress=_silent_progress,
+            progress=None,
         )
         self.SAMPLE_RATE = int(sr)
         if hasattr(wav, "detach"):  # torch.Tensor
