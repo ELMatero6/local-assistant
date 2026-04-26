@@ -21,6 +21,9 @@ class TTS:
     SAMPLE_RATE = 24000  # updated to the actual rate after the first call
 
     def __init__(self, cfg: TTSCfg):
+        import transformers
+        transformers.logging.set_verbosity_error()
+        transformers.logging.disable_progress_bar()
         from qwen_tts import Qwen3TTSModel
 
         self.cfg = cfg

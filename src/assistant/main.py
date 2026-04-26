@@ -32,6 +32,45 @@ def _silence_startup_noise() -> None:
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    sys.stderr = _StderrLineFilter(sys.stderr, _NOISY_LINES)
+
+
+_NOISY_LINES = (
+    "code_predictor_config is None",
+    "Initializing code_predictor model",
+    "Setting `pad_token_id`",
+    "Setting pad_token_id",
+)
+
+
+class _StderrLineFilter:
+    """Stream wrapper that drops lines matching any of the configured substrings.
+
+    Per-line: any unmatched content (real errors, tracebacks, etc.) still passes
+    through. Used only in default mode; -v keeps the raw stream.
+    """
+
+    def __init__(self, base, patterns: tuple[str, ...]):
+        self._base = base
+        self._patterns = patterns
+        self._buf = ""
+
+    def write(self, data: str) -> int:
+        self._buf += data
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            if not any(p in line for p in self._patterns):
+                self._base.write(line + "\n")
+        return len(data)
+
+    def flush(self) -> None:
+        if self._buf:
+            self._base.write(self._buf)
+            self._buf = ""
+        self._base.flush()
+
+    def __getattr__(self, name: str):
+        return getattr(self._base, name)
 
 
 async def speak_streaming(
