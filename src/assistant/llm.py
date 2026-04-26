@@ -64,7 +64,9 @@ class OllamaClient:
             parts.append("# Relevant long-term memory\n" + joined)
 
         parts.append(
-            "You can call tools to read and edit your identity, notes, and long-term memory. "
+            "You can call tools to search the web, read and edit your identity, notes, and "
+            "long-term memory. Use `search_web` whenever a question involves current events, "
+            "facts you're unsure of, or anything that may have changed since your training. "
             "Save anything you'll want to recall later (preferences, facts about the user, "
             "ongoing context) to memory.md via `memory_append`."
         )

@@ -126,6 +126,20 @@ class MemoryStore:
 
     def tool_definitions(self) -> list[dict[str, Any]]:
         return [
+            _tool(
+                "search_web",
+                "Search the web for current information, news, or anything you don't know. "
+                "Returns titles, URLs, and snippets. Always call this before saying you can't "
+                "find something.",
+                {
+                    "query": {"type": "string", "description": "Search query."},
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Max results to return (default 5, max 10).",
+                    },
+                },
+                required=["query"],
+            ),
             _tool("identity_read", "Read your current identity document.", {}),
             _tool(
                 "identity_write",
@@ -173,6 +187,19 @@ class MemoryStore:
 
     def dispatch(self, name: str, args: dict[str, Any]) -> str:
         try:
+            if name == "search_web":
+                from duckduckgo_search import DDGS
+                query = args["query"]
+                n = min(int(args.get("max_results", 5)), 10)
+                with DDGS() as ddgs:
+                    results = list(ddgs.text(query, max_results=n))
+                if not results:
+                    return "No results found."
+                lines = [
+                    f"**{r['title']}** ({r['href']})\n{r['body']}"
+                    for r in results
+                ]
+                return "\n\n".join(lines)
             if name == "identity_read":
                 return self.read_identity() or "(empty)"
             if name == "identity_write":

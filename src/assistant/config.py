@@ -21,8 +21,6 @@ class WakeCfg:
     model: str = "hey_jarvis"
     threshold: float = 0.5
     cooldown_sec: float = 1.5
-    interrupt_vad_threshold: float = 0.7  # speech prob to trigger barge-in during TTS
-    interrupt_min_frames: int = 4         # consecutive speech frames needed (~320 ms)
 
 
 @dataclass
@@ -101,7 +99,11 @@ class Config:
 
 
 def _build(section: dict[str, Any] | None, cls):
-    return cls(**(section or {}))
+    import dataclasses
+    if not section:
+        return cls()
+    valid = {f.name for f in dataclasses.fields(cls)}
+    return cls(**{k: v for k, v in section.items() if k in valid})
 
 
 def load_config(path: str | Path = "config.yaml") -> Config:
