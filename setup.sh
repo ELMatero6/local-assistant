@@ -90,13 +90,6 @@ source .venv/bin/activate
 
 log "Upgrading pip + installing project (editable)"
 pip install --upgrade pip wheel
-
-# Install SWivid's F5-TTS from GitHub before pip install -e . so the editable
-# install doesn't pull a different package that happens to share the PyPI name.
-log "Installing SWivid's F5-TTS from GitHub"
-pip install --force-reinstall "git+https://github.com/SWivid/F5-TTS.git" || \
-    warn "F5-TTS GitHub install failed; check network and retry."
-
 pip install -e .
 
 # ---- 5. CUDA runtime libs for faster-whisper --------------------------------

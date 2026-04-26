@@ -95,42 +95,52 @@ async def speak_streaming(
     fx_chain,
     cfg: Config,
 ) -> str:
-    """Buffer streamed tokens by sentence; synthesize + play each one as it lands.
+    """Synthesize sentence N+1 while sentence N is playing, hiding synthesis latency.
 
-    Returns the full accumulated reply text.
+    Producer fills an audio queue (up to 1 sentence ahead); consumer drains and
+    plays. Both run concurrently via the thread pool, so GPU synthesis and CPU
+    sounddevice playback overlap.
     """
-    buffer = ""
-    full = ""
-    async for token in token_iter:
-        buffer += token
-        full += token
-        sentences, buffer = split_sentences_streaming(buffer)
-        for sentence in sentences:
-            await _say(sentence, tts, fx_chain, cfg)
-    if buffer.strip():
-        await _say(buffer.strip(), tts, fx_chain, cfg)
-    return full.strip()
-
-
-async def _say(text: str, tts: TTS, fx_chain, cfg: Config) -> None:
     loop = asyncio.get_running_loop()
-    pcm = await loop.run_in_executor(None, tts.synth, text)
-    if pcm.size == 0:
-        return
-    if fx_chain is not None:
-        pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
-    try:
-        await loop.run_in_executor(
-            None,
-            play_pcm,
-            pcm,
-            tts.SAMPLE_RATE,
-            cfg.audio.output_device,
-        )
-    except asyncio.CancelledError:
-        # Interrupted by user; cut playback immediately.
-        sd.stop()
-        raise
+    audio_q: asyncio.Queue = asyncio.Queue(maxsize=1)
+    full_parts: list[str] = []
+
+    async def _produce() -> None:
+        buffer = ""
+        async for token in token_iter:
+            buffer += token
+            full_parts.append(token)
+            sentences, buffer = split_sentences_streaming(buffer)
+            for s in sentences:
+                pcm = await loop.run_in_executor(None, tts.synth, s)
+                if pcm.size == 0:
+                    continue
+                if fx_chain is not None:
+                    pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
+                await audio_q.put(pcm)
+        if buffer.strip():
+            pcm = await loop.run_in_executor(None, tts.synth, buffer.strip())
+            if pcm.size > 0:
+                if fx_chain is not None:
+                    pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
+                await audio_q.put(pcm)
+        await audio_q.put(None)  # sentinel
+
+    async def _consume() -> None:
+        while True:
+            pcm = await audio_q.get()
+            if pcm is None:
+                break
+            try:
+                await loop.run_in_executor(
+                    None, play_pcm, pcm, tts.SAMPLE_RATE, cfg.audio.output_device
+                )
+            except asyncio.CancelledError:
+                sd.stop()
+                raise
+
+    await asyncio.gather(_produce(), _consume())
+    return "".join(full_parts).strip()
 
 
 async def run(cfg: Config) -> None:

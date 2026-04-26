@@ -10,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-import torch
 
 from .config import TTSCfg
 
@@ -19,60 +18,43 @@ log = logging.getLogger("assistant.tts")
 _SENTENCE_END = re.compile(r"([\.!\?])\s+")
 
 
-def _silent_info(*_args, **_kwargs) -> None:
-    pass
-
-
 def _prepare_ref(audio_path: str, ref_text: str, max_sec: float) -> tuple[str, str]:
-    """Load ref_audio; if longer than max_sec, trim and proportionally truncate the text.
-
-    Returns (path, text). If trimmed, path is a temp wav file registered for
-    deletion at exit; otherwise path is the original.
-    """
+    """Load ref_audio; trim to max_sec if longer and proportionally truncate the transcript."""
     data, sr = sf.read(audio_path, always_2d=False)
     if data.ndim > 1:
-        data = data.mean(axis=1)  # stereo → mono
+        data = data.mean(axis=1)
     duration = len(data) / sr
-
     log.info("ref_audio: %.1fs @ %d Hz — %s", duration, sr, audio_path)
 
     if duration <= max_sec:
         return audio_path, ref_text.strip()
 
     log.warning(
-        "ref_audio is %.1fs which is longer than ref_audio_max_sec=%.0fs. "
-        "Trimming to %.0fs for better F5-TTS boundary detection. "
+        "ref_audio is %.1fs (> %.0fs max); trimming. "
         "For best quality use a %.0fs clip with an exact matching transcript.",
-        duration, max_sec, max_sec, max_sec,
+        duration, max_sec, max_sec,
     )
-
-    trimmed_data = data[: int(max_sec * sr)]
-
-    # Proportionally truncate the transcript by word count.
+    trimmed = data[: int(max_sec * sr)]
     words = ref_text.split()
     keep = max(1, int(len(words) * max_sec / duration))
     trimmed_text = " ".join(words[:keep])
 
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    sf.write(tmp.name, trimmed_data, sr)
+    sf.write(tmp.name, trimmed, sr)
     tmp.close()
     atexit.register(os.unlink, tmp.name)
-
     log.info("Trimmed ref text (%d→%d words): %s…", len(words), keep, trimmed_text[:60])
     return tmp.name, trimmed_text
 
 
 class TTS:
-    """F5-TTS voice cloning. Each call clones the configured ref voice for new text."""
+    """Qwen3-TTS voice cloning via qwen_tts.Qwen3TTSModel."""
 
-    SAMPLE_RATE = 24000  # F5-TTS Base outputs 24 kHz; updated after first synth
+    SAMPLE_RATE = 22050  # updated after first synth from returned sr
 
     def __init__(self, cfg: TTSCfg):
-        # SWivid's F5-TTS exposes F5TTS in f5_tts.api; older/fallback builds may skip the submodule.
-        try:
-            from f5_tts.api import F5TTS
-        except ImportError:
-            from f5_tts import F5TTS  # type: ignore[no-redef]
+        import torch
+        from qwen_tts import Qwen3TTSModel
 
         self.cfg = cfg
         if not cfg.ref_text.strip():
@@ -87,13 +69,16 @@ class TTS:
             cfg.ref_audio, cfg.ref_text, max_sec=cfg.ref_audio_max_sec
         )
 
-        # Ampere+ matmul win: trade a touch of fp32 precision for ~10-20% speed.
-        torch.set_float32_matmul_precision("high")
-        if torch.cuda.is_available():
-            torch.backends.cudnn.benchmark = True
+        # "cuda" → "cuda:0"; explicit "cuda:N" or "cpu" passed through unchanged.
+        device_map = (cfg.device + ":0") if cfg.device == "cuda" else cfg.device
 
-        log.info("Loading F5-TTS (%s)...", cfg.model)
-        self.model = F5TTS(model=cfg.model, device=cfg.device)
+        log.info("Loading Qwen3-TTS (%s)...", cfg.model)
+        self.model = Qwen3TTSModel.from_pretrained(
+            cfg.model,
+            device_map=device_map,
+            dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+        )
 
         if cfg.prewarm:
             log.info("Pre-warming TTS (first synth is always slowest)...")
@@ -106,20 +91,15 @@ class TTS:
         if not text:
             return np.zeros(0, dtype=np.float32)
         t0 = time.perf_counter()
-        wav, sr, _ = self.model.infer(
-            ref_file=self._ref_audio,
+        wavs, sr = self.model.generate_voice_clone(
+            text=text,
+            language=self.cfg.language,
+            ref_audio=self._ref_audio,
             ref_text=self._ref_text,
-            gen_text=text,
-            nfe_step=self.cfg.nfe_step,
-            cfg_strength=self.cfg.cfg_strength,
-            speed=self.cfg.speed,
-            cross_fade_duration=self.cfg.cross_fade_duration,
-            seed=self.cfg.seed if self.cfg.seed is not None else -1,
-            show_info=_silent_info,
-            progress=None,
         )
         self.SAMPLE_RATE = int(sr)
-        if hasattr(wav, "detach"):  # torch.Tensor
+        wav = wavs[0]
+        if hasattr(wav, "detach"):
             wav = wav.detach().cpu().numpy()
         audio = np.asarray(wav, dtype=np.float32).reshape(-1)
         elapsed = time.perf_counter() - t0

@@ -32,22 +32,18 @@ llm:
   context_messages: 8     # number of prior turns kept in history
 
 tts:
-  model: F5TTS_v1_Base           # F5-TTS checkpoint name (e.g. F5TTS_v1_Base, F5TTS_Base, E2TTS_Base)
-  device: cuda                   # cuda | cpu
-  ref_audio: dave.mp3            # reference voice clip for cloning (file path)
-  ref_text: |                    # EXACT transcript of ref_audio — every word, including fillers
+  model: Qwen/Qwen3-TTS-12Hz-0.6B-Base   # HuggingFace model ID
+  device: cuda                            # cuda | cpu | cuda:1 (for multi-GPU)
+  ref_audio: dave.mp3                     # reference voice clip for cloning
+  ref_text: |                             # EXACT transcript of ref_audio — every word
     Hey, I'm Dave Mustaine from Megadeth, and this is Cameo.
     I'd like to invite you to send a greeting from me to your friends, such as a birthday
     greeting, a wedding, a Christmas, divorced as fuck, something like that. You know
     what you want to say. Just get creative. Anyways, thanks for reaching out to me.
     Welcome to Cameo, and have a great 2022.
-  ref_audio_max_sec: 12.0       # clip auto-trimmed to this if longer; 5-12s is the sweet spot
-  prewarm: true                  # synthesize a throwaway phrase at startup; first real reply lands fast
-  nfe_step: 32                   # diffusion steps; lower = faster / less detail (try 16)
-  cfg_strength: 2.0              # classifier-free guidance; higher = stricter clone of ref voice
-  speed: 1.0                     # 1.0 matches ref tempo
-  cross_fade_duration: 0.15      # crossfade between F5's internal text chunks
-  seed:                          # null/empty = random; set int for reproducibility
+  ref_audio_max_sec: 12.0                 # auto-trim if longer; 5-12s is the sweet spot
+  language: English                       # synthesis language
+  prewarm: true                           # synthesize a throwaway phrase at startup
 
 fx:
   # HL1 tram-PA chain. Off by default so the cloned voice stays clean; flip

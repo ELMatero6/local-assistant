@@ -47,17 +47,13 @@ class LLMCfg:
 
 @dataclass
 class TTSCfg:
-    model: str = "F5TTS_v1_Base"          # F5-TTS checkpoint (F5TTS_v1_Base | F5TTS_Base | E2TTS_Base)
-    device: str = "cuda"                  # "cuda" or "cpu"
-    ref_audio: str = "dave.mp3"           # file path to the reference voice clip
-    ref_text: str = ""                    # transcript of ref_audio (required for cloning)
-    ref_audio_max_sec: float = 12.0       # clips longer than this are auto-trimmed; 5-12s is ideal
-    prewarm: bool = True                  # synthesize a throwaway phrase at startup to JIT kernels
-    nfe_step: int = 32                    # diffusion steps; lower = faster / less detailed (try 16)
-    cfg_strength: float = 2.0             # classifier-free guidance; higher = closer to ref voice
-    speed: float = 1.0                    # 1.0 = same tempo as ref; <1 slower, >1 faster
-    cross_fade_duration: float = 0.15     # crossfade between F5's internal text chunks
-    seed: int | None = None               # set int for reproducible voice; null = random
+    model: str = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"  # HuggingFace model ID
+    device: str = "cuda"                            # "cuda" or "cpu" (or "cuda:N" for specific GPU)
+    ref_audio: str = "dave.mp3"                     # reference voice clip for cloning
+    ref_text: str = ""                              # exact transcript of ref_audio
+    ref_audio_max_sec: float = 12.0                 # auto-trim if longer; 5-12s is ideal
+    language: str = "English"                       # synthesis language passed to generate_voice_clone
+    prewarm: bool = True                            # synthesize a throwaway phrase at startup
 
 
 @dataclass
