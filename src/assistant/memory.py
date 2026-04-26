@@ -188,7 +188,10 @@ class MemoryStore:
     def dispatch(self, name: str, args: dict[str, Any]) -> str:
         try:
             if name == "search_web":
-                from duckduckgo_search import DDGS
+                try:
+                    from ddgs import DDGS
+                except ImportError:
+                    from duckduckgo_search import DDGS
                 query = args["query"]
                 n = min(int(args.get("max_results", 5)), 10)
                 with DDGS() as ddgs:

@@ -107,7 +107,9 @@ async def speak_streaming(
     into a single persistent OutputStream so consecutive chunks play gaplessly.
     """
     loop = asyncio.get_running_loop()
-    audio_q: asyncio.Queue = asyncio.Queue(maxsize=2)
+    # Deep-ish queue so the producer can synth several sentences ahead while one
+    # is playing — otherwise the PortAudio buffer drains during slow synths.
+    audio_q: asyncio.Queue = asyncio.Queue(maxsize=8)
     full_parts: list[str] = []
     player_box: dict = {"player": None}
 

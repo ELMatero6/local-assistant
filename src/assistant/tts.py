@@ -55,7 +55,13 @@ class TTS:
 
     def __init__(self, cfg: TTSCfg):
         import torch
+        import transformers
         from qwen_tts import Qwen3TTSModel
+
+        # Direct suppression: env var + python logging don't catch the
+        # per-generation "Setting `pad_token_id`" notice that transformers
+        # emits via its own logger.
+        transformers.logging.set_verbosity_error()
 
         self.cfg = cfg
         if not cfg.ref_text.strip():

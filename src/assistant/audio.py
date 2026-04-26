@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 import numpy as np
 import sounddevice as sd
@@ -85,6 +86,9 @@ class StreamingPlayer:
 
     Eliminates the inter-chunk gap that `sd.play() + sd.wait()` introduces
     by keeping one stream open and just feeding it samples.
+
+    `latency='high'` makes PortAudio buffer ~100s of ms ahead so brief synthesis
+    pauses between sentences don't underflow the device.
     """
 
     def __init__(self, sample_rate: int, device: int | None, channels: int = 1):
@@ -93,32 +97,46 @@ class StreamingPlayer:
             channels=channels,
             device=device,
             dtype="float32",
+            latency="high",
         )
         self.stream.start()
+        # Held during write(); close() acquires it so we don't yank the ALSA
+        # device out from under an in-flight write (which corrupts state and
+        # makes the next stream open fail with mmap_begin errors).
+        self._lock = threading.Lock()
 
     def write(self, pcm: np.ndarray) -> None:
         """Block until there's room in the device buffer, then queue the samples."""
-        self.stream.write(np.ascontiguousarray(pcm, dtype=np.float32))
+        with self._lock:
+            self.stream.write(np.ascontiguousarray(pcm, dtype=np.float32))
 
     def drain(self) -> None:
         """Wait for already-queued samples to finish playing."""
-        try:
-            self.stream.stop()  # blocks until buffer empties
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                self.stream.stop()  # blocks until buffer empties
+            except Exception:
+                pass
 
     def abort(self) -> None:
-        """Stop immediately, discarding any buffered samples (for barge-in)."""
+        """Stop immediately, discarding any buffered samples (for barge-in).
+
+        Called without the lock so it can interrupt a blocked write(); PortAudio's
+        abort() is documented as safe to call from another thread.
+        """
         try:
             self.stream.abort()
         except Exception:
             pass
 
     def close(self) -> None:
-        try:
-            self.stream.close()
-        except Exception:
-            pass
+        # Wait for any in-flight write() to complete before tearing down the
+        # stream, otherwise ALSA may not release the device cleanly.
+        with self._lock:
+            try:
+                self.stream.close()
+            except Exception:
+                pass
 
 
 def to_float32(pcm_int16: np.ndarray) -> np.ndarray:
