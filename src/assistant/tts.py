@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import atexit
 import logging
+import os
 import re
+import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+import soundfile as sf
 import torch
 
 from .config import TTSCfg
@@ -17,6 +21,45 @@ _SENTENCE_END = re.compile(r"([\.!\?])\s+")
 
 def _silent_info(*_args, **_kwargs) -> None:
     pass
+
+
+def _prepare_ref(audio_path: str, ref_text: str, max_sec: float) -> tuple[str, str]:
+    """Load ref_audio; if longer than max_sec, trim and proportionally truncate the text.
+
+    Returns (path, text). If trimmed, path is a temp wav file registered for
+    deletion at exit; otherwise path is the original.
+    """
+    data, sr = sf.read(audio_path, always_2d=False)
+    if data.ndim > 1:
+        data = data.mean(axis=1)  # stereo → mono
+    duration = len(data) / sr
+
+    log.info("ref_audio: %.1fs @ %d Hz — %s", duration, sr, audio_path)
+
+    if duration <= max_sec:
+        return audio_path, ref_text.strip()
+
+    log.warning(
+        "ref_audio is %.1fs which is longer than ref_audio_max_sec=%.0fs. "
+        "Trimming to %.0fs for better F5-TTS boundary detection. "
+        "For best quality use a %.0fs clip with an exact matching transcript.",
+        duration, max_sec, max_sec, max_sec,
+    )
+
+    trimmed_data = data[: int(max_sec * sr)]
+
+    # Proportionally truncate the transcript by word count.
+    words = ref_text.split()
+    keep = max(1, int(len(words) * max_sec / duration))
+    trimmed_text = " ".join(words[:keep])
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    sf.write(tmp.name, trimmed_data, sr)
+    tmp.close()
+    atexit.register(os.unlink, tmp.name)
+
+    log.info("Trimmed ref text (%d→%d words): %s…", len(words), keep, trimmed_text[:60])
+    return tmp.name, trimmed_text
 
 
 class TTS:
@@ -40,6 +83,10 @@ class TTS:
                 "Put the reference voice clip there or change the path in config.yaml."
             )
 
+        self._ref_audio, self._ref_text = _prepare_ref(
+            cfg.ref_audio, cfg.ref_text, max_sec=cfg.ref_audio_max_sec
+        )
+
         # Ampere+ matmul win: trade a touch of fp32 precision for ~10-20% speed.
         torch.set_float32_matmul_precision("high")
         if torch.cuda.is_available():
@@ -60,8 +107,8 @@ class TTS:
             return np.zeros(0, dtype=np.float32)
         t0 = time.perf_counter()
         wav, sr, _ = self.model.infer(
-            ref_file=self.cfg.ref_audio,
-            ref_text=self.cfg.ref_text,
+            ref_file=self._ref_audio,
+            ref_text=self._ref_text,
             gen_text=text,
             nfe_step=self.cfg.nfe_step,
             cfg_strength=self.cfg.cfg_strength,

@@ -51,6 +51,7 @@ class TTSCfg:
     device: str = "cuda"                  # "cuda" or "cpu"
     ref_audio: str = "dave.mp3"           # file path to the reference voice clip
     ref_text: str = ""                    # transcript of ref_audio (required for cloning)
+    ref_audio_max_sec: float = 12.0       # clips longer than this are auto-trimmed; 5-12s is ideal
     prewarm: bool = True                  # synthesize a throwaway phrase at startup to JIT kernels
     nfe_step: int = 32                    # diffusion steps; lower = faster / less detailed (try 16)
     cfg_strength: float = 2.0             # classifier-free guidance; higher = closer to ref voice
