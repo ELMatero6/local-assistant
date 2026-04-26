@@ -80,5 +80,46 @@ def play_pcm(pcm: np.ndarray, sample_rate: int, device: int | None) -> None:
     sd.play(pcm, samplerate=sample_rate, device=device, blocking=True)
 
 
+class StreamingPlayer:
+    """Persistent OutputStream that consecutive PCM chunks are written into.
+
+    Eliminates the inter-chunk gap that `sd.play() + sd.wait()` introduces
+    by keeping one stream open and just feeding it samples.
+    """
+
+    def __init__(self, sample_rate: int, device: int | None, channels: int = 1):
+        self.stream = sd.OutputStream(
+            samplerate=sample_rate,
+            channels=channels,
+            device=device,
+            dtype="float32",
+        )
+        self.stream.start()
+
+    def write(self, pcm: np.ndarray) -> None:
+        """Block until there's room in the device buffer, then queue the samples."""
+        self.stream.write(np.ascontiguousarray(pcm, dtype=np.float32))
+
+    def drain(self) -> None:
+        """Wait for already-queued samples to finish playing."""
+        try:
+            self.stream.stop()  # blocks until buffer empties
+        except Exception:
+            pass
+
+    def abort(self) -> None:
+        """Stop immediately, discarding any buffered samples (for barge-in)."""
+        try:
+            self.stream.abort()
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        try:
+            self.stream.close()
+        except Exception:
+            pass
+
+
 def to_float32(pcm_int16: np.ndarray) -> np.ndarray:
     return (pcm_int16.astype(np.float32) / 32768.0).clip(-1.0, 1.0)

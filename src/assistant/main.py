@@ -12,7 +12,7 @@ import numpy as np
 
 import sounddevice as sd
 
-from .audio import MicStream, play_pcm
+from .audio import MicStream, StreamingPlayer, play_pcm
 from .config import Config, load_config
 from .fx import apply_fx, build_hl1_chain
 from .llm import OllamaClient
@@ -35,6 +35,8 @@ def _silence_startup_noise() -> None:
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
     sys.stderr = _StderrLineFilter(sys.stderr, _NOISY_LINES)
+    # qwen_tts uses print() for some warnings, which goes to stdout; wrap that too.
+    sys.stdout = _StderrLineFilter(sys.stdout, _NOISY_LINES)
 
 
 _NOISY_LINES = (
@@ -48,8 +50,12 @@ _NOISY_LINES = (
     "decoder_config is None",
     "Setting `pad_token_id`",
     "Setting pad_token_id",
-    # F5-TTS optional-dependency warnings
+    # flash-attn missing block (printed by qwen_tts)
     "Warning: flash-attn is not installed",
+    "Will only run the manual PyTorch version",
+    "Please install flash-attn",
+    "********",
+    # F5-TTS optional-dependency warnings (kept in case anyone swaps back)
     "SoX could not be found",
     "sox: not found",
     "If you do not have SoX",
@@ -97,13 +103,13 @@ async def speak_streaming(
 ) -> str:
     """Synthesize sentence N+1 while sentence N is playing, hiding synthesis latency.
 
-    Producer fills an audio queue (up to 1 sentence ahead); consumer drains and
-    plays. Both run concurrently via the thread pool, so GPU synthesis and CPU
-    sounddevice playback overlap.
+    Producer puts pre-synthesized PCM chunks on a queue; consumer writes them
+    into a single persistent OutputStream so consecutive chunks play gaplessly.
     """
     loop = asyncio.get_running_loop()
-    audio_q: asyncio.Queue = asyncio.Queue(maxsize=1)
+    audio_q: asyncio.Queue = asyncio.Queue(maxsize=2)
     full_parts: list[str] = []
+    player_box: dict = {"player": None}
 
     async def _produce() -> None:
         buffer = ""
@@ -124,22 +130,30 @@ async def speak_streaming(
                 if fx_chain is not None:
                     pcm = apply_fx(fx_chain, pcm, tts.SAMPLE_RATE)
                 await audio_q.put(pcm)
-        await audio_q.put(None)  # sentinel
+        await audio_q.put(None)
 
     async def _consume() -> None:
         while True:
             pcm = await audio_q.get()
             if pcm is None:
                 break
-            try:
-                await loop.run_in_executor(
-                    None, play_pcm, pcm, tts.SAMPLE_RATE, cfg.audio.output_device
+            if player_box["player"] is None:
+                player_box["player"] = StreamingPlayer(
+                    tts.SAMPLE_RATE, cfg.audio.output_device
                 )
+            try:
+                await loop.run_in_executor(None, player_box["player"].write, pcm)
             except asyncio.CancelledError:
-                sd.stop()
+                player_box["player"].abort()
                 raise
+        if player_box["player"] is not None:
+            await loop.run_in_executor(None, player_box["player"].drain)
 
-    await asyncio.gather(_produce(), _consume())
+    try:
+        await asyncio.gather(_produce(), _consume())
+    finally:
+        if player_box["player"] is not None:
+            player_box["player"].close()
     return "".join(full_parts).strip()
 
 
